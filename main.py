@@ -23,8 +23,8 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 
 model_names = sorted(name for name in models.__dict__
-                     if name.islower() and not name.startswith("__")
-                     and callable(models.__dict__[name]))
+    if name.islower() and not name.startswith("__")
+    and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -32,8 +32,8 @@ parser.add_argument('data', metavar='DIR',
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: ' +
-                    ' | '.join(model_names) +
-                    ' (default: resnet18)')
+                        ' | '.join(model_names) +
+                        ' (default: resnet18)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -110,8 +110,7 @@ def main():
         args.world_size = ngpus_per_node * args.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node,
-                 args=(ngpus_per_node, args))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
@@ -152,10 +151,8 @@ def main_worker(gpu, ngpus_per_node, args):
             # DistributedDataParallel, we need to divide the batch size
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / ngpus_per_node)
-            args.workers = int(
-                (args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[args.gpu])
+            args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
@@ -204,28 +201,26 @@ def main_worker(gpu, ngpus_per_node, args):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    # train_dataset = datasets.ImageFolder(
-    #     traindir,
-    #     transforms.Compose([
-    #         transforms.RandomResizedCrop(224),
-    #         transforms.RandomHorizontalFlip(),
-    #         transforms.ToTensor(),
-    #         normalize,
-    #     ]))
+    train_dataset = datasets.ImageFolder(
+        traindir,
+        transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ]))
 
-    # if args.distributed:
-    #     # train_sampler = torch.utils.data.distributed.DistributedSampler(
-    #     #     train_dataset)
-    # else:
-    #     train_sampler = None
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    else:
+        train_sampler = None
 
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_dataset, batch_size=args.batch_size, shuffle=(
-    #         train_sampler is None),
-    #     num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(traindir, transforms.Compose([
+        datasets.ImageFolder(valdir, transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
@@ -238,76 +233,76 @@ def main_worker(gpu, ngpus_per_node, args):
         validate(val_loader, model, criterion, args)
         return
 
-    # for epoch in range(args.start_epoch, args.epochs):
-    #     if args.distributed:
-    #         train_sampler.set_epoch(epoch)
-    #     adjust_learning_rate(optimizer, epoch, args)
+    for epoch in range(args.start_epoch, args.epochs):
+        if args.distributed:
+            train_sampler.set_epoch(epoch)
+        adjust_learning_rate(optimizer, epoch, args)
 
-    #     # train for one epoch
-    #     train(train_loader, model, criterion, optimizer, epoch, args)
+        # train for one epoch
+        train(train_loader, model, criterion, optimizer, epoch, args)
 
-    #     # evaluate on validation set
-    acc1 = validate(val_loader, model, criterion, args)
+        # evaluate on validation set
+        acc1 = validate(val_loader, model, criterion, args)
 
-    #     # remember best acc@1 and save checkpoint
-    #     is_best = acc1 > best_acc1
-    #     best_acc1 = max(acc1, best_acc1)
+        # remember best acc@1 and save checkpoint
+        is_best = acc1 > best_acc1
+        best_acc1 = max(acc1, best_acc1)
 
-    #     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-    #                                                 and args.rank % ngpus_per_node == 0):
-    #         save_checkpoint({
-    #             'epoch': epoch + 1,
-    #             'arch': args.arch,
-    #             'state_dict': model.state_dict(),
-    #             'best_acc1': best_acc1,
-    #             'optimizer': optimizer.state_dict(),
-    #         }, is_best)
+        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
+                and args.rank % ngpus_per_node == 0):
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'arch': args.arch,
+                'state_dict': model.state_dict(),
+                'best_acc1': best_acc1,
+                'optimizer' : optimizer.state_dict(),
+            }, is_best)
 
 
-# def train(train_loader, model, criterion, optimizer, epoch, args):
-#     batch_time = AverageMeter('Time', ':6.3f')
-#     data_time = AverageMeter('Data', ':6.3f')
-#     losses = AverageMeter('Loss', ':.4e')
-#     top1 = AverageMeter('Acc@1', ':6.2f')
-#     top5 = AverageMeter('Acc@5', ':6.2f')
-#     progress = ProgressMeter(
-#         len(train_loader),
-#         [batch_time, data_time, losses, top1, top5],
-#         prefix="Epoch: [{}]".format(epoch))
+def train(train_loader, model, criterion, optimizer, epoch, args):
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(
+        len(train_loader),
+        [batch_time, data_time, losses, top1, top5],
+        prefix="Epoch: [{}]".format(epoch))
 
-#     # switch to train mode
-#     model.train()
+    # switch to train mode
+    model.train()
 
-#     end = time.time()
-#     for i, (images, target) in enumerate(train_loader):
-#         # measure data loading time
-#         data_time.update(time.time() - end)
+    end = time.time()
+    for i, (images, target) in enumerate(train_loader):
+        # measure data loading time
+        data_time.update(time.time() - end)
 
-#         if args.gpu is not None:
-#             images = images.cuda(args.gpu, non_blocking=True)
-#         target = target.cuda(args.gpu, non_blocking=True)
+        if args.gpu is not None:
+            images = images.cuda(args.gpu, non_blocking=True)
+        target = target.cuda(args.gpu, non_blocking=True)
 
-#         # compute output
-#         output = model(images)
-#         loss = criterion(output, target)
+        # compute output
+        output = model(images)
+        loss = criterion(output, target)
 
-#         # measure accuracy and record loss
-#         acc1, acc5 = accuracy(output, target, topk=(1, 5))
-#         losses.update(loss.item(), images.size(0))
-#         top1.update(acc1[0], images.size(0))
-#         top5.update(acc5[0], images.size(0))
+        # measure accuracy and record loss
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        losses.update(loss.item(), images.size(0))
+        top1.update(acc1[0], images.size(0))
+        top5.update(acc5[0], images.size(0))
 
-#         # compute gradient and do SGD step
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
-#         # measure elapsed time
-#         batch_time.update(time.time() - end)
-#         end = time.time()
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
 
-#         if i % args.print_freq == 0:
-#             progress.display(i)
+        if i % args.print_freq == 0:
+            progress.display(i)
 
 
 def validate(val_loader, model, criterion, args):
@@ -354,15 +349,14 @@ def validate(val_loader, model, criterion, args):
     return top1.avg
 
 
-# def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-#     torch.save(state, filename)
-#     if is_best:
-#         shutil.copyfile(filename, 'model_best.pth.tar')
+def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+    torch.save(state, filename)
+    if is_best:
+        shutil.copyfile(filename, 'model_best.pth.tar')
 
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
-
     def __init__(self, name, fmt=':f'):
         self.name = name
         self.fmt = fmt
@@ -402,11 +396,11 @@ class ProgressMeter(object):
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
 
-# def adjust_learning_rate(optimizer, epoch, args):
-#     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-#     lr = args.lr * (0.1 ** (epoch // 30))
-#     for param_group in optimizer.param_groups:
-#         param_group['lr'] = lr
+def adjust_learning_rate(optimizer, epoch, args):
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    lr = args.lr * (0.1 ** (epoch // 30))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 def accuracy(output, target, topk=(1,)):
