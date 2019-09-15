@@ -191,7 +191,7 @@ def val_pretrained(args):
             num_workers=args.workers, pin_memory=True)
 
         acc1, acc5 = validate(val_loader, model, args)
-        sheet.write(row, 0, get_model_full_name(arch))
+        sheet.write(row, 0, arch)
         sheet.write(row, 1, acc1)
         sheet.write(row, 2, acc5)
         row += 1
@@ -236,6 +236,7 @@ def validate(val_loader, model, args):
 
             # compute output
             output = model(images)[-1]
+            output = output.reshape((output.shape[0], output.shape[1]))
             # measure accuracy and record loss
             acc = accuracy(output, target)
             top1.update(acc[0][0], images.size(0))

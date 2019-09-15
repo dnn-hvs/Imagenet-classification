@@ -124,7 +124,6 @@ class DenseNet(nn.Module):
         features = []
         for name, layer in self.features._modules.items():
             x = layer(x)
-            print(name)
             if name[:-1] == 'denseblock':
                 features.append(x)
 

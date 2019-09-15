@@ -176,11 +176,11 @@ class GoogLeNet(nn.Module):
         # N x 1024
         x = self.dropout(x)
         x = self.fc(x)
-
+        x7 = x
         # N x 1000 (num_classes)
         if self.training and self.aux_logits:
             return _GoogLeNetOuputs(x, aux2, aux1)
-        return x1, x2, x3, x4, x5, x6
+        return x1, x2, x3, x4, x5, x6, x7
 
 
 class Inception(nn.Module):
