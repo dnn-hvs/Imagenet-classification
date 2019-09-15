@@ -10,6 +10,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+import xlwt
 from vgg import vgg11, vgg13, vgg16, vgg19
 from resnet import resnet18, resnet34, resnet50, resnet101, resnet152
 from alexnet import AlexNet
@@ -51,6 +52,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--model_dir', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
+parser.add_argument('--save_file', default='', type=str, metavar='PATH', required=True,
+                    help='path to latest checkpoint (default: none)')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--gpu', default=0, type=int,
@@ -58,6 +61,12 @@ parser.add_argument('--gpu', default=0, type=int,
 
 
 def main():
+    wb = xlwt.Workbook()
+    sheet = wb.add_sheet('Accuracies')
+    style = xlwt.easyxf('font: bold 1')
+    sheet.write(0, 0, 'Model Name', style)
+    sheet.write(0, 1, 'Acc @ 1', style)
+    sheet.write(0, 2, 'Acc @ 5', style)
     args = parser.parse_args()
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -65,23 +74,23 @@ def main():
     if args.model_dir:
         if os.path.isfile(args.model_dir):
             raise NotADirectoryError
-
+        row = 1
         for x in os.listdir(args.model_dir):
             arch = x.split('_')[0]
             if arch == 'sqnet1':
                 arch += x.split('_')[1]
             # create model
-            if args.pretrained:
-                print("=> using pre-trained model '{}'".format(arch))
-                # model = models[arch](pretrained=True)
-                if arch == 'alexnet' or arch == 'sqnet1_1' or arch == 'sqnet1_0':
-                    model = models[arch]()
-                else:
-                    model = models[arch](pretrained=True)
-            else:
-                print("=> creating model '{}'".format(arch))
-                model = models[arch]()
-                print(model.state_dict().keys())
+            # if args.pretrained:
+            #     print("=> using pre-trained model '{}'".format(arch))
+            #     # model = models[arch](pretrained=True)
+            #     if arch == 'alexnet' or arch == 'sqnet1_1' or arch == 'sqnet1_0':
+            #         model = models[arch]()
+            #     else:
+            #         model = models[arch](pretrained=True)
+            # else:
+            print("=> creating model '{}'".format(arch))
+            model = models[arch]()
+            print(model.state_dict().keys())
 
             model_pth = os.path.join(args.model_dir, x)
 
@@ -113,33 +122,39 @@ def main():
                 if not (k in state_dict):
                     print('No param {}.'.format(k))
                     state_dict[k] = model_state_dict[k]
-            model.load_state_dict(state_dict, strict=False)
-            # model.load_state_dict(checkpoint['state_dict'])
-            # optimizer.load_state_dict(checkpoint['optimizer'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(model_pth, checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(model_pth))
+                    model.load_state_dict(state_dict, strict=False)
+                    # model.load_state_dict(checkpoint['state_dict'])
+                    # optimizer.load_state_dict(checkpoint['optimizer'])
+                    print("=> loaded checkpoint '{}' (epoch {})"
+                          .format(model_pth, checkpoint['epoch']))
+                else:
+                    print("=> no checkpoint found at '{}'".format(model_pth))
 
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
+            torch.cuda.set_device(args.gpu)
+            model = model.cuda(args.gpu)
 
-        valdir = os.path.join(args.data, 'val')
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225])
+            valdir = os.path.join(args.data, 'val')
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                             std=[0.229, 0.224, 0.225])
 
-        val_loader = torch.utils.data.DataLoader(
-            datasets.ImageFolder(valdir, transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ])),
-            batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, pin_memory=True)
+            val_loader = torch.utils.data.DataLoader(
+                datasets.ImageFolder(valdir, transforms.Compose([
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor(),
+                    normalize,
+                ])),
+                batch_size=args.batch_size, shuffle=False,
+                num_workers=args.workers, pin_memory=True)
 
-        if args.evaluate:
-            validate(val_loader, model, args)
+            acc1, acc5 = validate(val_loader, model, args)
+            sheet.write(row, 0, x)
+            sheet.write(row, 1, acc1)
+            sheet.write(row, 1, acc5)
+            row += 1
+
+        wb.save(args.save_file + '.xlsx')
+
     else:
         print('''You call me and not tell me what do I work with? Me leavin!\nNext time, pass in the model_dir, if ya don't mind''')
         return
@@ -154,7 +169,7 @@ def validate(val_loader, model, args):
 
     with torch.no_grad():
         end = time.time()
-        for i, (images, target) in enumerate(val_loader):
+        for (images, target) in range(val_loader):
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
@@ -174,7 +189,7 @@ def validate(val_loader, model, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg
+    return top1.avg, top5.avg
 
 
 class AverageMeter(object):
