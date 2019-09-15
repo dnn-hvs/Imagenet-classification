@@ -123,8 +123,7 @@ def main():
 
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-        # define loss function (criterion) and optimizer
-        criterion = nn.CrossEntropyLoss().cuda(args.gpu)
+
         valdir = os.path.join(args.data, 'val')
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
@@ -140,22 +139,16 @@ def main():
             num_workers=args.workers, pin_memory=True)
 
         if args.evaluate:
-            validate(val_loader, model, criterion, args)
+            validate(val_loader, model, args)
     else:
         print('''You call me and not tell me what do I work with? Me leavin!\nNext time, pass in the model_dir, if ya don't mind''')
         return
 
 
-def validate(val_loader, model, criterion, args):
+def validate(val_loader, model, args):
     batch_time = AverageMeter('Time', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
-    progress = ProgressMeter(
-        len(val_loader),
-        [batch_time, losses, top1, top5],
-        prefix='Test: ')
-
     # switch to evaluate mode
     model.eval()
 
@@ -168,20 +161,14 @@ def validate(val_loader, model, criterion, args):
 
             # compute output
             output = model(images)[-1]
-            loss = criterion(output, target)
-
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, target)
-            losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-
-            if i % args.print_freq == 0:
-                progress.display(i)
 
         # TODO: this should also be done with the ProgressMeter
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
@@ -213,23 +200,6 @@ class AverageMeter(object):
     def __str__(self):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
-
-
-class ProgressMeter(object):
-    def __init__(self, num_batches, meters, prefix=""):
-        self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
-        self.meters = meters
-        self.prefix = prefix
-
-    def display(self, batch):
-        entries = [self.prefix + self.batch_fmtstr.format(batch)]
-        entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
-
-    def _get_batch_fmtstr(self, num_batches):
-        num_digits = len(str(num_batches // 1))
-        fmt = '{:' + str(num_digits) + 'd}'
-        return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
 
 def accuracy(output, target, topk=(1, 5)):
