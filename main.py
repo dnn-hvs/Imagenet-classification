@@ -146,7 +146,7 @@ def main():
                 num_workers=args.workers, pin_memory=True)
 
             acc1, acc5 = validate(val_loader, model, args)
-            sheet.write(row, 0, x)
+            sheet.write(row, 0, get_model_full_name(x))
             sheet.write(row, 1, acc1)
             sheet.write(row, 2, acc5)
             row += 1
@@ -191,13 +191,33 @@ def val_pretrained(args):
             num_workers=args.workers, pin_memory=True)
 
         acc1, acc5 = validate(val_loader, model, args)
-        sheet.write(row, 0, arch)
+        sheet.write(row, 0, get_model_full_name(arch))
         sheet.write(row, 1, acc1)
         sheet.write(row, 2, acc5)
         row += 1
         # Free memory
         torch.cuda.empty_cache()
     wb.save('pretrained' + '.xlsx')
+
+
+def get_model_full_name(name):
+    split_name = name.split('_')
+    model_name = split_name[0]
+    prev_combinations = split_name[1]
+    extension = split_name[2]
+    new_combinations = []
+
+    if prev_combinations[0] == "0" or prev_combinations[0] == "1":
+        new_combinations.append(
+            "fmri" if prev_combinations[0] == "0" else "meg")
+        new_combinations.append(
+            "early" if prev_combinations[1] == "0" else "late")
+        new_combinations.append(
+            "fov" if prev_combinations[2] == "0" else "nofov")
+        new_combinations.append(
+            "unfrozen" if prev_combinations[3] == "0" else "frozen")
+        return model_name + '_' + '_'.join(new_combinations) + '_'+extension
+    return name
 
 
 def validate(val_loader, model, args):
@@ -217,9 +237,9 @@ def validate(val_loader, model, args):
             # compute output
             output = model(images)[-1]
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target)
-            top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
+            acc = accuracy(output, target)
+            top1.update(acc[0][0], images.size(0))
+            top5.update(acc[1][0], images.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
