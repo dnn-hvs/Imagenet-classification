@@ -45,7 +45,7 @@ parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
+parser.add_argument('-b', '--batch-size', default=64, type=int,
                     metavar='N',
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
@@ -90,7 +90,7 @@ def main():
             # else:
             print("=> creating model '{}'".format(arch))
             model = models[arch]()
-            print(model.state_dict().keys())
+            # print(model.state_dict().keys())
 
             model_pth = os.path.join(args.model_dir, x)
 
@@ -122,13 +122,9 @@ def main():
                 if not (k in state_dict):
                     print('No param {}.'.format(k))
                     state_dict[k] = model_state_dict[k]
-                    model.load_state_dict(state_dict, strict=False)
-                    # model.load_state_dict(checkpoint['state_dict'])
-                    # optimizer.load_state_dict(checkpoint['optimizer'])
-                    print("=> loaded checkpoint '{}' (epoch {})"
-                          .format(model_pth, checkpoint['epoch']))
-                else:
-                    print("=> no checkpoint found at '{}'".format(model_pth))
+            model.load_state_dict(state_dict, strict=False)
+            print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(model_pth, checkpoint['epoch']))
 
             torch.cuda.set_device(args.gpu)
             model = model.cuda(args.gpu)
@@ -150,9 +146,10 @@ def main():
             acc1, acc5 = validate(val_loader, model, args)
             sheet.write(row, 0, x)
             sheet.write(row, 1, acc1)
-            sheet.write(row, 1, acc5)
+            sheet.write(row, 2, acc5)
             row += 1
-
+            # Free memory
+            torch.cuda.empty_cache()
         wb.save(args.save_file + '.xlsx')
 
     else:
@@ -169,7 +166,7 @@ def validate(val_loader, model, args):
 
     with torch.no_grad():
         end = time.time()
-        for (images, target) in range(val_loader):
+        for (images, target) in val_loader:
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
@@ -189,7 +186,7 @@ def validate(val_loader, model, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg, top5.avg
+    return top1.avg.item(), top5.avg.item()
 
 
 class AverageMeter(object):
