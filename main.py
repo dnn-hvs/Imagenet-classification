@@ -11,6 +11,7 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import xlwt
+import warnings
 from vgg import vgg11, vgg13, vgg16, vgg19
 from resnet import resnet18, resnet34, resnet50, resnet101, resnet152
 from alexnet import AlexNet
@@ -52,7 +53,7 @@ parser.add_argument('-b', '--batch-size', default=64, type=int,
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--model_dir', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
-parser.add_argument('--save_file', default='', type=str, metavar='PATH', required=True,
+parser.add_argument('--save_file', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
@@ -71,6 +72,17 @@ def main():
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
+    if args.pretrained:
+        if args.model_dir or args.save_file:
+            warnings.warn('''You have set the pretrained flag to true.'''
+                          '''With this the model_dir and save_file arguments will be ignored.'''
+                          '''Only the pretrained models will be evaluated, saving the results in pretrained.xlsx file.''')
+        val_pretrained(args)
+        return
+
+    if not args.save_file:
+        raise ValueError('No argument save_file')
+
     if args.model_dir:
         if os.path.isfile(args.model_dir):
             raise NotADirectoryError
@@ -79,18 +91,8 @@ def main():
             arch = x.split('_')[0]
             if arch == 'sqnet1':
                 arch += x.split('_')[1]
-            # create model
-            # if args.pretrained:
-            #     print("=> using pre-trained model '{}'".format(arch))
-            #     # model = models[arch](pretrained=True)
-            #     if arch == 'alexnet' or arch == 'sqnet1_1' or arch == 'sqnet1_0':
-            #         model = models[arch]()
-            #     else:
-            #         model = models[arch](pretrained=True)
-            # else:
             print("=> creating model '{}'".format(arch))
             model = models[arch]()
-            # print(model.state_dict().keys())
 
             model_pth = os.path.join(args.model_dir, x)
 
@@ -155,6 +157,47 @@ def main():
     else:
         print('''You call me and not tell me what do I work with? Me leavin!\nNext time, pass in the model_dir, if ya don't mind''')
         return
+
+
+def val_pretrained(args):
+    wb = xlwt.Workbook()
+    sheet = wb.add_sheet('Accuracies')
+    style = xlwt.easyxf('font: bold 1')
+    sheet.write(0, 0, 'Model Name', style)
+    sheet.write(0, 1, 'Acc @ 1', style)
+    sheet.write(0, 2, 'Acc @ 5', style)
+    model, row = None, 1
+    for arch in models:
+        print("=> using pre-trained model '{}'".format(arch))
+        if arch == 'alexnet' or arch == 'sqnet1_1' or arch == 'sqnet1_0':
+            model = models[arch]()
+        else:
+            model = models[arch](pretrained=True)
+        torch.cuda.set_device(args.gpu)
+        model = model.cuda(args.gpu)
+
+        valdir = os.path.join(args.data, 'val')
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
+
+        val_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
+
+        acc1, acc5 = validate(val_loader, model, args)
+        sheet.write(row, 0, arch)
+        sheet.write(row, 1, acc1)
+        sheet.write(row, 2, acc5)
+        row += 1
+        # Free memory
+        torch.cuda.empty_cache()
+    wb.save('pretrained' + '.xlsx')
 
 
 def validate(val_loader, model, args):
